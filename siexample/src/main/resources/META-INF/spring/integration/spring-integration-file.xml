@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:int="http://www.springframework.org/schema/integration"
+	xmlns:int-file="http://www.springframework.org/schema/integration/file"
+	xsi:schemaLocation="http://www.springframework.org/schema/integration http://www.springframework.org/schema/integration/spring-integration.xsd
+		http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+		http://www.springframework.org/schema/integration/file http://www.springframework.org/schema/integration/file/spring-integration-file.xsd">
+
+<!-- Making it a pub sub channel so that both the adapter and gateway can pick it up -->
+	<int:publish-subscribe-channel  id="filesOutputChannel"/>
+	<int:channel id="filesOutputChannelGateway"/>
+	<int:channel id="input"/>
+
+	<int:service-activator id="fileSa" ref="commonServiceActivator"	method="printFileName" input-channel="filesOutputChannelGateway"/>
+	<int:service-activator id="fileSa" ref="commonServiceActivator"	method="printTailedMessage" input-channel="input"/>
+
+<!-- Inbound File adapter reads all files from the directory specified, pushes the file to the filesOutputChannel channel -->
+	<int-file:inbound-channel-adapter id="fileAdapter"
+		directory="${file.inputdirectory}" channel="filesOutputChannel" prevent-duplicates="true" filename-pattern="*.txt">
+		<int:poller fixed-rate="1000" />
+	</int-file:inbound-channel-adapter>
+
+<!-- Outbound File adapter reads all files from filesOutputChannel channel, and writes the file to the directory -->			  
+	<int-file:outbound-channel-adapter channel="filesOutputChannel" directory="${file.outputdirectory}" />
+
+<!-- Gateway is an extension of adapter, adapter write files from channel to a directory 
+Gateway takes step further -passes the file written on to the next channel 
+request-channel -Channel to read the file from
+reply-channel -Channel to put the files on after writing it to the directory
+-->
+
+	<int-file:outbound-gateway request-channel="filesOutputChannel"
+	    reply-channel="filesOutputChannelGateway"
+	    directory="C:\Chandan\Projects\outputfolderforsi\filegateway"
+	    mode="REPLACE" delete-source-files="true"/>
+
+<int-file:tail-inbound-channel-adapter id="apache"
+	channel="input"
+	file="${file.taildirectory}"/>	
+</beans>

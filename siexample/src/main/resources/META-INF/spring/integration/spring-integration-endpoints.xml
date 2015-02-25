@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:int="http://www.springframework.org/schema/integration"
+	xmlns:int-jpa="http://www.springframework.org/schema/integration/jpa"
+	xmlns:jdbc="http://www.springframework.org/schema/jdbc"
+	xmlns:tx="http://www.springframework.org/schema/tx"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xmlns:int-feed="http://www.springframework.org/schema/integration/feed"
+	xmlns:jms="http://www.springframework.org/schema/integration/jms"
+	xmlns:int-mail="http://www.springframework.org/schema/integration/mail"
+	xsi:schemaLocation="http://www.springframework.org/schema/integration http://www.springframework.org/schema/integration/spring-integration.xsd
+		http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+		http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd
+		http://www.springframework.org/schema/jdbc http://www.springframework.org/schema/jdbc/spring-jdbc.xsd
+		http://www.springframework.org/schema/tx http://www.springframework.org/schema/tx/spring-tx.xsd
+		http://www.springframework.org/schema/integration/jpa http://www.springframework.org/schema/integration/jpa/spring-integration-jpa.xsd
+		http://www.springframework.org/schema/integration/feed http://www.springframework.org/schema/integration/feed/spring-integration-feed.xsd
+		http://www.springframework.org/schema/integration/jms http://www.springframework.org/schema/integration/jms/spring-integration-jms.xsd
+		http://www.springframework.org/schema/integration/mail http://www.springframework.org/schema/integration/mail/spring-integration-mail.xsd">
+
+
+    <context:property-placeholder location="classpath*:**/setting.properties" />
+    <context:component-scan base-package="com.cpandey"/>
+	<import resource="classpath*:**/spring-integration-jms.xml" />
+	<import resource="classpath*:**/spring-integration-database.xml" />
+	<import resource="classpath*:**/email-config.xml" />
+	
+	<!-- Global Poller -->
+	<int:poller default="true" fixed-rate="2000" />
+	
+	<int-feed:inbound-channel-adapter id="soJavaFeedAdapter" 
+					channel="fetchedFeedChannel" 
+					auto-startup="true" 
+					url="${feeds.url}">
+		<int:poller fixed-rate="5000" max-messages-per-poll="10" />
+	</int-feed:inbound-channel-adapter>
+
+	<!-- Message is read by feed inbound channel adapter and put on this channel, which is picked up by the filter for processing -->
+	<int:channel id="fetchedFeedChannel">
+		<int:queue/>
+	</int:channel>
+	<int:channel id="fetchedFeedChannelForAggregatior">
+		<int:queue/>
+	</int:channel>
+	<int:publish-subscribe-channel id="filteredFeedChannel"/>
+
+	<int:channel id="transformedChannel"/>
+	<int:channel id="jdbcChannel"/>
+	<int:channel id="mailChannel"/>
+	<int:channel id="jmsChannel"/>
+	
+	<int:channel id="aggregatedFeedChannel"/>
+	<int:channel id="cahinedInputFeedChannel"/>
+	<int:channel id="splitFeedOutputChannel"/>
+	<int:channel id="logChannel">
+		<int:queue/>
+	</int:channel>
+	<!-- JDBC -->
+	<int:channel id="createFeedRequestChannel"/>
+	<int:channel id="readFeedRequestChannel"/>
+	<int:channel id="printAllFeedChannel"/>
+
+	<bean id="filterSoFeedBean" class="com.cpandey.siexample.filter.SoFeedFilter"/>
+	<bean id="feedDbTransformerBean" class="com.cpandey.siexample.transformer.SoFeedDbTransformer" />
+	<bean id="feedJMSTransformerBean" class="com.cpandey.siexample.transformer.SoFeedJMSTransformer" />
+	<bean id="feedMailTransformerBean" class="com.cpandey.siexample.transformer.SoFeedMailTransformer" />
+	<bean id="splitterSoFeedBean" class="com.cpandey.siexample.splitter.SoFeedSplitter"/>
+	
+
+	<!--Filter the feed which are not for Java category -->
+	<int:filter input-channel="fetchedFeedChannel" output-channel="filteredFeedChannel"
+    ref="filterSoFeedBean" method="filterFeed"/>
+
+	<!-- Splitter -->
+	<int:splitter ref="splitterSoFeedBean" method="splitAndPublish" input-channel="filteredFeedChannel" 
+	  output-channel="splitFeedOutputChannel" />
+	
+	<int:service-activator id="splitChannelSA" ref="commonServiceActivator"	method="printSplitMessage" input-channel="splitFeedOutputChannel"	/>
+    
+	<!-- Transformers -->
+	<int:transformer id="dbFeedTransformer" ref="feedDbTransformerBean" input-channel="filteredFeedChannel"
+	             method="transformFeed" output-channel="transformedChannel"/>
+	
+	<int:transformer id="jmsFeedTransformer" ref="feedJMSTransformerBean" input-channel="filteredFeedChannel"
+	             method="transformFeed" output-channel="transformedChannel"/>
+	
+	<int:transformer id="mailFeedTransformer" ref="feedMailTransformerBean" input-channel="filteredFeedChannel"
+	             method="transformFeed" output-channel="transformedChannel"/>
+	
+	
+	<int:payload-type-router input-channel="transformedChannel" default-output-channel="logChannel">
+		<int:mapping type="com.cpandey.siexample.pojo.SoFeed"	channel="jdbcChannel" />
+		<int:mapping type="java.lang.String" channel="jmsChannel" />
+		<int:mapping type="org.springframework.mail.MailMessage" channel="mailChannel" />
+	</int:payload-type-router>
+	
+</beans>

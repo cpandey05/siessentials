@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:int="http://www.springframework.org/schema/integration"
+	xmlns:int-jpa="http://www.springframework.org/schema/integration/jpa"
+	xmlns:int-jdbc="http://www.springframework.org/schema/integration/jdbc"
+	xmlns:jdbc="http://www.springframework.org/schema/jdbc"
+	xmlns:tx="http://www.springframework.org/schema/tx"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/integration/jdbc	http://www.springframework.org/schema/integration/jdbc/spring-integration-jdbc.xsd
+		http://www.springframework.org/schema/jdbc http://www.springframework.org/schema/jdbc/spring-jdbc.xsd
+		http://www.springframework.org/schema/integration http://www.springframework.org/schema/integration/spring-integration.xsd
+		http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+		http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd
+		http://www.springframework.org/schema/tx http://www.springframework.org/schema/tx/spring-tx.xsd
+		http://www.springframework.org/schema/integration/jpa http://www.springframework.org/schema/integration/jpa/spring-integration-jpa.xsd">
+
+	<!-- Setting Up the Database -->
+	<int:channel id="printSqlResult"/>
+
+	<int-jdbc:inbound-channel-adapter channel="printSqlResult"
+		data-source="dataSource"
+		query="select * from TESTDATA where name = 'Chandan'"
+		update="update TESTDATA set name = 'ChandanNew' where name = 'Chandan'">
+	</int-jdbc:inbound-channel-adapter>
+	
+	<!--In the example below, messages arriving on the channel labelled printSqlResult will be used for persisting in Database -->
+	<int-jdbc:outbound-channel-adapter channel="printSqlResult"	data-source="dataSource"
+		query="insert into TESTDATA p(ID, NAME, CREATED_DATE_TIME) values(2, :payload[name], NOW())">
+	</int-jdbc:outbound-channel-adapter>
+
+	<!-- The takes input from a channel and then posts the result on to a reply channel-->
+	<int-jdbc:outbound-gateway
+    update="insert into TESTDATA (ID, NAME, CREATED_DATE_TIME) values (3, :payload[name], NOW())"
+    request-channel="insertChannel" reply-channel="printSqlResult" data-source="dataSource" />
+
+ 	<!-- Service activators to put the message in DB, File, JMS and email -->	
+	<int:service-activator ref="persistFeed"	input-channel="jdbcChannel"	/>
+ 
+   <!-- JPA Set up -->
+	<!-- Feed service is a gateway, The interface is define in Java, and this is its impl
+	   When createFeed is called on Feed service, it will place the Pojo on jdbcChannel -so this is a response channel
+	   jdbc channel is read by updating-outbound-gateway and that does all the actual update  
+   	-->
+	<!-- Gate request and reply channel concept -->
+	<!-- . It publishes a Message using feed service and put it on channel identified by request-channel. --> 
+	<!-- The proxy then blocks the call until it receives a reply from the reply-channel -->
+	<!-- Typically you don't have to specify the default-reply-channel, since a Gateway will  -->
+	<!-- auto-create a temporary, anonymous reply channel, where it will listen for the reply.  -->
+	
+	<int:gateway id="feedService"
+		service-interface="com.cpandey.siexample.service.FeedService"
+		default-request-timeout="5000" default-reply-timeout="5000">
+		<int:method name="createFeed" request-channel="createFeedRequestChannel"/>
+		<int:method name="readAllFeed" request-channel="readFeedRequestChannel"/>
+	</int:gateway>
+
+	<int-jpa:updating-outbound-gateway entity-manager-factory="entityManagerFactory"
+		request-channel="createFeedRequestChannel" entity-class="com.cpandey.siexample.pojo.FeedEntity" reply-channel="printAllFeedChannel">
+		<int-jpa:transactional transaction-manager="transactionManager" />
+	</int-jpa:updating-outbound-gateway>
+	
+	<int-jpa:retrieving-outbound-gateway entity-manager-factory="entityManagerFactory"
+		request-channel="readFeedRequestChannel"
+		jpa-query="select f from FeedEntity f order by f.title asc" reply-channel="printAllFeedChannel">
+	</int-jpa:retrieving-outbound-gateway>
+	
+	<int:service-activator ref="persistFeed" method="printFeed"	input-channel="printAllFeedChannel"	/>
+
+	<!-- Depending on the selected profile, users can use different JPA Providers -->
+
+	<beans profile="default, hibernate">
+		<import resource="classpath:/META-INF/spring/integration/hibernate-config.xml"/>
+	</beans>
+
+</beans>

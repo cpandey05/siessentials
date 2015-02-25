@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:int="http://www.springframework.org/schema/integration"
+	xmlns:int-twitter="http://www.springframework.org/schema/integration/twitter"
+	xsi:schemaLocation="http://www.springframework.org/schema/integration http://www.springframework.org/schema/integration/spring-integration.xsd
+		http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+		http://www.springframework.org/schema/integration/twitter http://www.springframework.org/schema/integration/twitter/spring-integration-twitter.xsd">
+
+	<int:channel id="twitterChannel"/>
+	<int:channel id="twitterSearchChannel"/>
+	<int:channel id="twitterDirectMessageChannel"/>
+	<int:channel id="twitterMentionMessageChannel"/>
+	<int:channel id="twitterSendMessageChannel"/>
+	<int:channel id="twitterSendDirectMessage"/>
+	<int:channel id="searchQueryChannel"/>
+	<int:channel id="searchQueryResultChannel"/>
+	
+	<int:service-activator ref="commonServiceActivator"	method="echoTweets" input-channel="twitterChannel"/>
+	<int:service-activator ref="commonServiceActivator"	method="echoSearchedTweets" input-channel="twitterSearchChannel"/>
+	<int:service-activator ref="commonServiceActivator"	method="echoTweets" input-channel="twitterDirectMessageChannel"/>
+	<int:service-activator ref="commonServiceActivator"	method="echoTweets" input-channel="twitterMentionMessageChannel"/>
+
+	<!-- The order of constructor arguments is: 1) consumerKey, 2) consumerSecret, 3) accessToken, and 4) accessTokenSecret. -->
+	<bean id="twitterTemplate" class="org.springframework.social.twitter.api.impl.TwitterTemplate">
+		<constructor-arg value="${twitter.consumerkey}"/>
+		<constructor-arg value="${twitter.consumersecret}"/>
+		<constructor-arg value="${twitter.accesstoken}"/>
+		<constructor-arg value="${twitter.accesstokensecret}"/>
+	</bean>
+
+	<int-twitter:inbound-channel-adapter id="testTweet"
+	  		twitter-template="twitterTemplate"
+	  		channel="twitterChannel">
+	</int-twitter:inbound-channel-adapter>
+	
+	<int-twitter:search-inbound-channel-adapter id="testSearch"
+		twitter-template="twitterTemplate"
+  		query="#springintegration"
+		channel="twitterSearchChannel">
+	</int-twitter:search-inbound-channel-adapter>
+	
+	<int-twitter:dm-inbound-channel-adapter id="directMessage"
+	  		twitter-template="twiterTemplate"
+	  		channel="twitterDirectMessageChannel">
+	</int-twitter:dm-inbound-channel-adapter>
+	
+	<int-twitter:mentions-inbound-channel-adapter id="mentionMessage"
+	  		twitter-template="twiterTemplate"
+			channel="twitterMentionMessageChannel">
+	</int-twitter:mentions-inbound-channel-adapter>
+	<int-twitter:outbound-channel-adapter
+  		twitter-template="twitterTemplate"
+  		channel="twitterSendMessageChannel"/>
+	<int-twitter:dm-outbound-channel-adapter
+	  		twitter-template="twitterTemplate"
+	  		channel="twitterSendDirectMessage"/>	
+	<int-twitter:search-outbound-gateway id="twitterSearch"
+		request-channel="searchQueryChannel" 
+		twitter-template="twitterTemplate" 
+		search-args-expression="#springintegration" 
+		reply-channel="searchQueryResultChannel" 
+	/>	  		
+</beans>

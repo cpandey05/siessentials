@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:int="http://www.springframework.org/schema/integration"
+	xmlns:int-jpa="http://www.springframework.org/schema/integration/jpa"
+	xmlns:jdbc="http://www.springframework.org/schema/jdbc"
+	xmlns:tx="http://www.springframework.org/schema/tx"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xmlns:int-feed="http://www.springframework.org/schema/integration/feed"
+	xmlns:jms="http://www.springframework.org/schema/integration/jms"
+	xmlns:int-mail="http://www.springframework.org/schema/integration/mail"
+	xsi:schemaLocation="http://www.springframework.org/schema/integration http://www.springframework.org/schema/integration/spring-integration.xsd
+		http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+		http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd
+		http://www.springframework.org/schema/jdbc http://www.springframework.org/schema/jdbc/spring-jdbc.xsd
+		http://www.springframework.org/schema/tx http://www.springframework.org/schema/tx/spring-tx.xsd
+		http://www.springframework.org/schema/integration/jpa http://www.springframework.org/schema/integration/jpa/spring-integration-jpa.xsd
+		http://www.springframework.org/schema/integration/feed http://www.springframework.org/schema/integration/feed/spring-integration-feed.xsd
+		http://www.springframework.org/schema/integration/jms http://www.springframework.org/schema/integration/jms/spring-integration-jms.xsd
+		http://www.springframework.org/schema/integration/mail http://www.springframework.org/schema/integration/mail/spring-integration-mail.xsd">
+
+
+   <context:property-placeholder location="classpath*:**/setting.properties" />
+   <context:component-scan base-package="com.cpandey"/>
+ 	<import resource="classpath*:**/spring-integration-jms.xml" />
+	<import resource="classpath*:**/spring-integration-database.xml" />
+	<import resource="classpath*:**/email-config.xml" />
+	
+	<!-- Global Poller -->
+	<int:poller default="true" fixed-rate="2000" />
+	
+	<int-feed:inbound-channel-adapter id="soJavaFeedAdapterForAggregator" 
+					channel="fetchedFeedChannelForAggregatior" 
+					auto-startup="true" 
+					url="${feeds.url}">
+		<int:poller fixed-rate="2000" max-messages-per-poll="10" />
+	</int-feed:inbound-channel-adapter>
+	
+	
+	<int:channel id="fetchedFeedChannel">
+		<int:queue/>
+	</int:channel>
+	<int:channel id="fetchedFeedChannelForAggregatior">
+		<int:queue/>
+	</int:channel>
+	<int:publish-subscribe-channel id="filteredFeedChannel"/>
+	
+	<int:channel id="transformedChannel"/>
+	<int:channel id="jdbcChannel"/>
+	<int:channel id="mailChannel"/>
+	<int:channel id="jmsChannel"/>
+	
+	<int:channel id="aggregatedFeedChannel"/>
+	<int:channel id="cahinedInputFeedChannel"/>
+	<int:channel id="splitFeedOutputChannel"/>
+	<int:channel id="logChannel">
+		<int:queue/>
+	</int:channel>
+	<!-- JDBC -->
+	<int:channel id="createFeedRequestChannel"/>
+	<int:channel id="readFeedRequestChannel"/>
+	<int:channel id="printAllFeedChannel"/>
+
+	<bean id="aggregatorSoFeedBean" class="com.cpandey.siexample.aggregator.SoFeedAggregator"/>
+	<bean id="sofeedCompletionStrategyBean" class="com.cpandey.siexample.aggregator.CompletionStrategy"/>
+	<bean id="soFeedCorrelationStrategyBean" class="com.cpandey.siexample.aggregator.CorrelationStrategy"/>
+	<bean id="sofeedResCompletionStrategyBean" class="com.cpandey.siexample.resequencer.ResequencerCompletionStrategy"/>
+	<bean id="soFeedResCorrelationStrategyBean" class="com.cpandey.siexample.resequencer.ResequencerCorrelationStrategy"/>
+	
+
+
+<!-- Aggregator -->
+	<int:aggregator input-channel="fetchedFeedChannelForAggregatior"
+		output-channel="aggregatedFeedChannel" ref="aggregatorSoFeedBean"
+		method="aggregateAndPublish" release-strategy="sofeedCompletionStrategyBean"
+		release-strategy-method="checkCompleteness" correlation-strategy="soFeedCorrelationStrategyBean"
+		correlation-strategy-method="groupFeedsBasedOnCategory"
+		message-store="messageStore" expire-groups-upon-completion="true">
+		<int:poller fixed-rate="1000"></int:poller>
+	</int:aggregator>
+
+	<bean id="messageStore"	class="org.springframework.integration.store.SimpleMessageStore" />
+
+<!-- A service activator to validate that  aggregator has groupded message from same category -->	
+	<int:service-activator id="aggregatorSA" ref="commonServiceActivator"	method="printAggregatedFeed" input-channel="aggregatedFeedChannel" output-channel="cahinedInputFeedChannel"	/>
+	<int:service-activator id="resequencerSA" ref="commonServiceActivator"	method="printResequencedFeed" input-channel="aggregatedFeedChannel" output-channel="cahinedInputFeedChannel"	/>
+	<int:service-activator id="logChannelSA" ref="commonServiceActivator"	method="printPayLoad" input-channel="logChannel"	/>
+
+
+	<int:chain input-channel="cahinedInputFeedChannel" output-channel="logChannel">
+	    <int:header-enricher>
+	        <int:header name="test" value="value"/>
+	    </int:header-enricher>
+	    <int:service-activator ref="commonServiceActivator" method="chainedFeed"/>
+	</int:chain>	
+	
+</beans>

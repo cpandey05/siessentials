@@ -1,0 +1,107 @@
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:batch="http://www.springframework.org/schema/batch"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xmlns:int="http://www.springframework.org/schema/integration"
+	xmlns:int-file="http://www.springframework.org/schema/integration/file"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+		http://www.springframework.org/schema/beans/spring-beans.xsd
+		http://www.springframework.org/schema/batch
+		http://www.springframework.org/schema/batch/spring-batch.xsd
+		http://www.springframework.org/schema/context
+		http://www.springframework.org/schema/context/spring-context.xsd
+		http://www.springframework.org/schema/integration
+		http://www.springframework.org/schema/integration/spring-integration.xsd
+		http://www.springframework.org/schema/integration/file 
+		http://www.springframework.org/schema/integration/file/spring-integration-file.xsd">
+		
+	<!-- Load  data source -->
+	<context:property-placeholder location="/META-INF/spring/integration/setting.properties"/>
+	
+	<!-- Scan packages for JDBC configurations -->
+	<context:component-scan	base-package="com.cpandey.siexample.batch"/>
+	
+	<batch:job id="importEmployeeRecords" job-repository="jobRepository" parent="simpleJob">
+		<batch:step id="loadEmployeeRecords">
+     		 <batch:tasklet transaction-manager="transactionManager">  
+				<batch:chunk reader="itemReader" writer="itemWriter" commit-interval="5"/>
+			</batch:tasklet>
+		</batch:step>
+		<!-- Listener for status of JOB -->
+		<batch:listeners>
+			<batch:listener ref="simpleListener"/>
+		</batch:listeners>		
+	</batch:job>
+	
+	<int:gateway id="simpleListener"
+		service-interface="org.springframework.batch.core.JobExecutionListener"
+		default-request-channel="jobExecutionsStatus"/>
+
+	<int:service-activator ref="batchStatusServiceActivator"	method="printStatus" input-channel="jobExecutionsStatus"/>
+
+	<bean id="itemReader" class="org.springframework.batch.item.file.FlatFileItemReader" scope="step">
+		<property name="resource" value="file:///#{jobParameters['input.file.name']}"/>
+		<property name="lineMapper">
+			<bean class="org.springframework.batch.item.file.mapping.DefaultLineMapper">
+				<property name="lineTokenizer">
+					<bean class="org.springframework.batch.item.file.transform.DelimitedLineTokenizer">
+						<property name="names" value="name,designation,dept,address"/>
+					</bean>
+				</property>
+				<property name="fieldSetMapper">
+					<bean class="com.cpandey.siexample.batch.EmployeeFieldSetMapper"/>
+				</property>
+			</bean>
+		</property>
+	</bean>
+
+	<bean id="itemWriter" class="com.cpandey.siexample.batch.EmployeeRecordWriter"/>
+	
+	<!-- Job Launcher -->
+	<bean id="jobLauncher" class="org.springframework.batch.core.launch.support.SimpleJobLauncher">
+		<property name="jobRepository" ref="jobRepository"/>
+	</bean>
+
+	 <bean id="jobRepository" class="org.springframework.batch.core.repository.support.MapJobRepositoryFactoryBean">  
+	        <property name="transactionManager" ref="transactionManager"/>  
+	 </bean>  
+	<bean id="transactionManager" class="org.springframework.batch.support.transaction.ResourcelessTransactionManager" />  
+
+    <bean id="simpleJob" class="org.springframework.batch.core.job.SimpleJob" abstract="true">  
+        <property name="jobRepository" ref="jobRepository" />  
+    </bean>  
+ 
+ 
+ <!-- Inbound File adapter reads all files from the directory specified, pushes the file to the filesOutputChannel channel -->
+	<int-file:inbound-channel-adapter id="fileAdapter"
+		directory="C:\Chandan\Projects\inputfolderforsi" channel="filesOutputChannel" prevent-duplicates="true" filename-pattern="*.txt">
+		<int:poller fixed-rate="1000" />
+	</int-file:inbound-channel-adapter>
+	
+	<int:channel id="jobExecutionsStatus"/>
+	
+	<int:channel id="filesOutputChannel"/>
+	<int:channel id="batchRequest"/>
+	<int:channel id="requestStatuses">
+		<int:queue capacity="10"/>
+	</int:channel>
+	
+	<int-file:inbound-channel-adapter id="fileAdapter"
+		directory="C:\Chandan\Projects\inputfolderforsi" channel="filesOutputChannel" prevent-duplicates="true" filename-pattern="*.txt">
+		<int:poller fixed-rate="1000" />
+	</int-file:inbound-channel-adapter>
+	
+	<int:transformer input-channel="filesOutputChannel" output-channel="batchRequest">
+				<bean class="com.cpandey.siexample.batch.FileMessageToJobRequest">
+						<property name="job" ref="importEmployeeRecords"/>
+						<property name="fileParameterName" value="input.file.name"/>
+				</bean>
+	</int:transformer>
+	
+	<int:service-activator method="launch" input-channel="batchRequest" output-channel="requestStatuses">
+		<bean class="org.springframework.batch.integration.launch.JobLaunchingMessageHandler">
+					<constructor-arg ref="jobLauncher"/>
+		</bean>
+	</int:service-activator>
+    
+</beans>

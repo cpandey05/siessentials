@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:int="http://www.springframework.org/schema/integration"
+	xmlns:int-jms="http://www.springframework.org/schema/integration/jms"
+	xsi:schemaLocation="http://www.springframework.org/schema/integration http://www.springframework.org/schema/integration/spring-integration.xsd
+		http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+		http://www.springframework.org/schema/integration/jms http://www.springframework.org/schema/integration/jms/spring-integration-jms.xsd">
+
+	<int:channel id="jmsProcessedChannel"/>
+	<int:channel id="printFeedChannel"/>
+	
+	<int:service-activator ref="commonServiceActivator"	method="echoJmsMessageInput" input-channel="jmsProcessedChannel"/>
+	
+	<int-jms:outbound-channel-adapter connection-factory="connectionFactory" channel="jmsChannel" destination="feedInputQueue" />
+
+	<!-- JMS channel -Inbound adapter-->
+	<int-jms:inbound-channel-adapter connection-factory="connectionFactory"
+			destination="feedInputQueue"
+			channel="jmsProcessedChannel">
+			<int:poller fixed-rate="1000" />
+	</int-jms:inbound-channel-adapter>
+	
+	<!-- Queue Definition -->
+	<bean id="feedInputQueue" class="org.apache.activemq.command.ActiveMQQueue">
+		<constructor-arg value="queue.input"/>
+	</bean>
+	
+	<!-- JMS configuration -->
+	<bean id="connectionFactory" 
+		class="org.springframework.jms.connection.CachingConnectionFactory">
+		<property name="targetConnectionFactory">
+			<bean class="org.apache.activemq.ActiveMQConnectionFactory">
+				<property name="brokerURL" 
+						value="${jms.brokerurl}"/>
+			</bean>
+		</property>
+		<property name="sessionCacheSize" value="10"/>
+		<property name="cacheProducers" value="false"/>
+	</bean>
+	
+</beans>

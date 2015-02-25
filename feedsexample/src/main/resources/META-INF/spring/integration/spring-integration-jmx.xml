@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:int="http://www.springframework.org/schema/integration"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xmlns:int-jmx="http://www.springframework.org/schema/integration/jmx"
+	xsi:schemaLocation="http://www.springframework.org/schema/integration http://www.springframework.org/schema/integration/spring-integration.xsd
+		http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+		http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd
+		http://www.springframework.org/schema/integration/jmx http://www.springframework.org/schema/integration/jmx/spring-integration-jmx.xsd">
+
+
+	<!-- This cretes a Mbean server with the ID mbeanServer -->
+	<context:mbean-server/>
+	<!-- This tag exports any MBeans to the server -->
+	<context:mbean-export/>
+
+	<int:service-activator ref="commonServiceActivator"	method="echoMessageInput" input-channel="listenForNotification"/>
+
+	<int:channel id="listenForNotification">
+		<int:interceptors>
+			<int:wire-tap channel="logger"/>
+		</int:interceptors>
+	</int:channel>
+
+	<int:message-history/>
+
+	<!-- Notification listening channel adapter -->
+	<int-jmx:notification-listening-channel-adapter id="notifListener"
+		channel="listenForNotification"
+		object-name="com.cpandey.siexample.jmx:name=testMBean,type=TestMBean"/>
+
+	<!-- Notification publishing channel adapter -->
+	<int:channel id="publishNotification"/>
+	<int-jmx:notification-publishing-channel-adapter id="publishListener"
+		channel="publishNotification"
+		object-name="com.cpandey.siexample.jmx:name=notificationPublisher"
+		default-notification-type="default.notification.type"/>
+
+	<!-- Attribute polling channel adapter -->
+	<!-- Used for message history as well -->
+	<int:channel id="polledDataChannel"/>
+	<int-jmx:attribute-polling-channel-adapter id="attribPoller"
+			channel="polledDataChannel"
+			object-name="com.cpandey.siexample.jmx:name=testMBean,type=TestMBean"
+			attribute-name="ManagedData">
+		<int:poller max-messages-per-poll="1" fixed-rate="5000"/>
+	</int-jmx:attribute-polling-channel-adapter>
+	<int:service-activator ref="commonServiceActivator"	method="attributePolled" input-channel="polledDataChannel"/>
+
+
+	<!-- Tree polling channel adapter -->
+	<int:channel id="mbeanTreeDataChannel"/>
+	<int-jmx:tree-polling-channel-adapter  id="treePoller"    	
+		channel="mbeanTreeDataChannel"    	
+		query-name="com.cpandey.siexample.jmx:type=*">
+        <int:poller max-messages-per-poll="1" fixed-rate="5000"/>
+	</int-jmx:tree-polling-channel-adapter>
+	<int:service-activator ref="commonServiceActivator"	method="mbeanTreePolled" input-channel="mbeanTreeDataChannel"/>
+
+	<!-- Invoke operation channel adapter-->
+	<int:channel id="triggerOperationChannel"/>
+	<int-jmx:operation-invoking-channel-adapter id="triggerOperation"
+		channel="triggerOperationChannel"
+		object-name="com.cpandey.siexample.jmx:name=testMBean,type=TestMBean"
+		operation-name="setManagedData"/>
+	
+	<!-- Invoke operation channel gateway  -->
+	<int:channel id="requestOperationChannel"/>
+	<int:channel id="replyFromOperationChannel"/>
+	<int-jmx:operation-invoking-outbound-gateway id="triggerOperationGateway"
+		request-channel="requestOperationChannel"
+   		reply-channel="replyFromOperationChannel"
+   		object-name="com.cpandey.siexample.jmx:name=testMBean,type=TestMBean"
+   		operation-name="getManagedData"/>
+	<int:service-activator ref="commonServiceActivator"	method="operationInvokedGateway" input-channel="replyFromOperationChannel"/>
+ 		
+	<!-- Export Mbeans -->
+	<int-jmx:mbean-export 
+		default-domain="com.cpandey.siexample"
+		server="mbeanServer"/>
+
+	<int:logging-channel-adapter log-full-message="true" id="logger" level="INFO"/>		
+	
+	<int:channel id="controlBusChannel"/>
+	<int:control-bus input-channel="controlBusChannel"/>
+	
+</beans>

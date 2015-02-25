@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:int="http://www.springframework.org/schema/integration"
+	xmlns:int-ftp="http://www.springframework.org/schema/integration/ftp"
+	xsi:schemaLocation="http://www.springframework.org/schema/integration http://www.springframework.org/schema/integration/spring-integration.xsd
+		http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+		http://www.springframework.org/schema/integration/ftp http://www.springframework.org/schema/integration/ftp/spring-integration-ftp.xsd">
+
+	<int:channel id="fetchedFeedChannel"/>
+	
+<!-- FTP Create Session-->
+	<bean id="ftpClientSessionFactory"
+	    class="org.springframework.integration.ftp.session.DefaultFtpSessionFactory">
+	    <property name="host" value="${ftp.host}"/>
+	    <property name="port" value="${ftp.port}"/>
+	    <property name="username" value="${ftp.username}"/>
+	    <property name="password" value="${ftp.password}"/>
+	</bean>
+
+<!-- FTP Download files from server and put it in local directory-->
+	<int-ftp:inbound-channel-adapter 
+		channel="fetchedFeedChannel"
+		session-factory="ftpClientSessionFactory"
+		remote-directory="${ftp.remotefolder}"
+		local-directory="${ftp.localfolder}"
+		auto-create-local-directory="true"
+    	delete-remote-files="true"
+    	filename-pattern="*.txt"
+    	local-filename-generator-expression="#this.toLowerCase() + '.trns'">
+		<int:poller fixed-rate="1000"/>
+	</int-ftp:inbound-channel-adapter>
+
+</beans>

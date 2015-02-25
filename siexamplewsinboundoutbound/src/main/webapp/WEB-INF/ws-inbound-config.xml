@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:int="http://www.springframework.org/schema/integration"
+	xmlns:int-ws="http://www.springframework.org/schema/integration/ws"
+	xsi:schemaLocation="http://www.springframework.org/schema/integration/ws http://www.springframework.org/schema/integration/ws/spring-integration-ws.xsd
+		http://www.springframework.org/schema/integration http://www.springframework.org/schema/integration/spring-integration.xsd
+		http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd">
+
+	<int:channel id="input"/>
+	
+	<int-ws:inbound-gateway id="ws-inbound-gateway" request-channel="input"/>
+	
+	<int:service-activator input-channel="input">
+		<bean class="com.cpandey.siexample.WsInboundService"/>
+	</int:service-activator>
+
+	<!-- Ensures that all incoming requests will be routed to the ws:inbound-gateway -->
+		<bean class="org.springframework.ws.server.endpoint.mapping.UriEndpointMapping">
+			<property name="defaultEndpoint" ref="ws-inbound-gateway"/>
+	</bean>
+	
+
+</beans>

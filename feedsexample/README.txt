@@ -1,6 +1,8 @@
+Build the Maven project to download all dependencies "mvn -X clean package" 
+
 Refer /META-INF/spring/integration/setting.properties for all the values which can be set
 
-All classes needed to run sample App aer inside package com.cpandey.siexample 
+All classes needed to run sample App are inside package com.cpandey.siexample 
 	-select any of those and then "run as Java" program
 
 Following are the details classes which map to chapter wise samples 

@@ -30,7 +30,7 @@ import com.sun.syndication.feed.synd.SyndContentImpl;
 import com.sun.syndication.feed.synd.SyndEntry;
 import com.sun.syndication.feed.synd.SyndEntryImpl;
 
-@ContextConfiguration	// default context name is <ClassName>-context.xml
+@ContextConfiguration(locations = {"classpath*:**/TestSoDBFeedTransformer-context.xml"})	// default context name is <ClassName>-context.xml
 @RunWith(SpringJUnit4ClassRunner.class)
 public class TestSoDBFeedTransformer {
 	@Autowired

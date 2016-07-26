@@ -53,7 +53,7 @@
 	
 <!-- Channels for external components -->
 	<int:channel id="jdbcChannel"/>
-<!-- 	<int:channel id="jmsChannel"/> -->
+	<int:channel id="jmsChannel"/>
 	<int:channel id="mailChannel"/>
 	<int:channel id="logChannel">
 		<int:queue/>
